@@ -1,0 +1,454 @@
+---
+title: "MDR Text Analysis"
+author: "Nathan"
+date: "April 23, 2018"
+output: word_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Text Analysis
+
+```{r load}
+library(XML)
+library(httr)
+library(rvest)
+library(tidytext)
+library(rlist)
+library(tidytext)
+library(tidyverse)
+library(lubridate)
+library(scales)
+library(curl)
+#establish stop words
+mdr_stop_words <- bind_rows(data_frame(word = c("b", "6", "2018", "2017", "2014", "2015", "essure",
+                                                "reported", "report", "inserted", "information",
+                                                "female", "lot", "pt", "2008", "2009",
+                                                "30", "day", "micro", "inserts", "insert",
+                                                "2011", "2010", "4", "99.74", "fallopian"),
+                                       lexicon = c("custom")),
+                            stop_words)
+```
+
+```{r one}
+#1 Read in the MDR data and create a tibble with date as data and text as character
+MDRresultsCSV <- read.csv("MDRresults.csv")
+#Note: I know we should not use our local wd, but I could not get the markdown without obtaining an "error" regarding the csv rows. The online file can be obtained with the following code:
+# MDRresultsCSV <- read.csv(curl("https://drive.google.com/open?id=1DryePp8gAl_j9hX6nfMM4-LddCBBJ6Qw"))
+
+MDRresultsTBL <- as_tibble(MDRresultsCSV)
+MDRresults <- MDRresultsTBL %>%
+  mutate(text = as.character(text)) %>%
+  mutate(date = date(date))
+```
+
+```{r two}
+#2 total overall word count: No surprise that Pain would show up as the most common.
+MDRtotalwc <- MDRresults %>%
+  unnest_tokens(word, text) %>%
+  mutate(word = str_extract(word, "[a-z']+")) %>%
+  anti_join(mdr_stop_words) %>%
+  count(word, sort = TRUE) %>%
+  na.omit()
+```
+
+```{r three}
+#3 Save frequencies of words
+MDRfreq <- MDRresults %>%
+  dplyr::select(-text_type_code, -patient_sequence_number) %>%
+  unnest_tokens(word, text) %>%
+  mutate(word = str_extract(word, "[a-z']+")) %>%
+  anti_join(mdr_stop_words) %>%
+  na.omit() %>%
+  mutate(month = month.abb[month(date)]) %>%
+  mutate(year = year(date)) %>%
+  count(month, year, word, sort = TRUE) %>%
+  mutate(freq = (n/sum(n))) %>%
+  arrange(desc(freq))
+
+ggplot(MDRfreq, aes(x = factor(month, levels = month.abb), y = freq)) +
+  geom_jitter(alpha = 0.1, size = 2.5, width = 0.3, height = 0.3) +
+  geom_text(aes(label = word), check_overlap = TRUE, vjust = 1.5) +
+  scale_y_log10(labels = percent_format()) +
+  scale_color_gradient(limits = c(0, 0.1), low ="darkslategray4", high = "gray75") +
+  facet_wrap(~year, ncol = 2) +
+  theme(legend.position = "none") +
+  labs(y = "Frequency", x = NULL)
+```
+
+```{r four}
+#4 Plotting word frequencies
+MDRfreq14 <- MDRfreq %>%
+  filter(year >= 2014)
+#Narrowing years
+ggplot(MDRfreq14, aes(x = factor(month, levels = month.abb), y = freq)) +
+  geom_jitter(alpha = 0.1, size = 2.5, width = 0.3, height = 0.3) +
+  geom_text(aes(label = word), check_overlap = TRUE, vjust = 1.5) +
+  scale_y_log10(labels = percent_format()) +
+  scale_color_gradient(limits = c(0, 0.1), low ="darkslategray4", high = "gray75") +
+  facet_wrap(~year, ncol = 2) +
+  theme(legend.position = "none") +
+  labs(y = "Frequency", x = NULL)
+
+MDRfreq17 <- MDRfreq %>%
+  filter(year == 2017)
+#Or choose by year
+ggplot(MDRfreq17, aes(x = factor(month, levels = month.abb), y = freq)) +
+  geom_jitter(alpha = 0.1, size = 2.5, width = 0.3, height = 0.3) +
+  geom_text(aes(label = word), check_overlap = TRUE, vjust = 1.5) +
+  scale_y_log10(labels = percent_format()) +
+  scale_color_gradient(limits = c(0, 0.1), low ="darkslategray4", high = "gray75") +
+  facet_wrap(~year, ncol = 2) +
+  theme(legend.position = "none") +
+  labs(y = "Frequency", x = NULL)
+```
+
+```{r five}
+#5 plot the rate of pain over the years
+MDRpain <- MDRfreq %>%
+  filter(word == "pain",
+         year >= 2009)
+ggplot(MDRpain, aes(x = factor(month, levels = month.abb), y = freq)) +
+  geom_jitter(alpha = 0.1, size = 2.5, width = 0.3, height = 0.3) +
+  geom_text(aes(label = word), check_overlap = TRUE, vjust = 1.5) +
+  scale_y_log10(labels = percent_format()) +
+  scale_color_gradient(limits = c(0, 0.1), low ="darkslategray4", high = "gray75") +
+  facet_wrap(~year, ncol = 2) +
+  theme(legend.position = "none") +
+  labs(y = "Frequency", x = NULL)
+#did anyone die?
+MDRdeath <- MDRfreq %>%
+  filter(word == "death")
+
+ggplot(MDRdeath, aes(x = factor(month, levels = month.abb), y = freq)) +
+  geom_jitter(alpha = 0.1, size = 2.5, width = 0.3, height = 0.3) +
+  geom_text(aes(label = word), check_overlap = TRUE, vjust = 1.5) +
+  scale_y_log10(labels = percent_format()) +
+  scale_color_gradient(limits = c(0, 0.1), low ="darkslategray4", high = "gray75") +
+  facet_wrap(~year, ncol = 2) +
+  theme(legend.position = "none") +
+  labs(y = "Frequency", x = NULL)
+```
+
+```{r six}
+#6 obtain total word count:
+MDRcount <- MDRresults %>%
+  unnest_tokens(word, text) %>%
+  mutate(word = str_extract(word, "[a-z']+")) %>%
+  anti_join(mdr_stop_words) %>%
+  count(word, sort = TRUE) %>%
+  na.omit()
+
+#word count over years:
+MDRyearcount <- MDRresults %>%
+  unnest_tokens(word, text) %>%
+  mutate(word = str_extract(word, "[a-z']+")) %>%
+  mutate(year = year(date)) %>%
+  anti_join(mdr_stop_words) %>%
+  count(year, word, sort = TRUE) %>%
+  na.omit()
+
+#plot wordcount 
+plot_MDRyearcount <- MDRyearcount %>%
+  count(word, n) %>%
+  arrange(desc(n)) %>%
+  mutate(word = factor(word, levels = rev(unique(word)))) %>%
+  top_n(20, n) %>%
+  ungroup()
+
+ggplot(plot_MDRyearcount, aes(word, n, fill = "red")) +
+  geom_col(show.legend = FALSE) +
+  labs(x = NULL, y = "count") +
+  coord_flip()
+
+#plot wordcount over years from 2009
+plot_MDRyearcount <- MDRyearcount %>%
+  count(word, year, n) %>%
+  arrange(desc(n)) %>%
+  mutate(word = factor(word, levels = rev(unique(word)))) %>%
+  group_by(year) %>%
+  top_n(5, n) %>%
+  filter(year >= 2009) %>%
+  ungroup()
+
+ggplot(plot_MDRyearcount, aes(word, n, fill = year)) +
+  geom_col(show.legend = FALSE) +
+  labs(x = NULL, y = "count") +
+  facet_wrap(~year, ncol = 2, scales = "free") +
+  coord_flip()
+
+#word cloud
+library(wordcloud)
+
+MDRtotalwc %>%
+  with(wordcloud(word, n, max.words = 100, colors=colorRampPalette(brewer.pal(9,"Blues"))(32)))
+
+```
+
+```{r seven}
+#7 using bigrams
+MDRbigrams <- MDRresults %>%
+  unnest_tokens(bigram, text, token = "ngrams", n = 2)
+#n = 2 sets pairs of two consecutive words, also known as bigrams
+MDRbigrams
+
+#check the most common bigrams:
+MDRbigrams %>%
+  count(bigram, sort = TRUE)
+
+#to remove these common stopwords, start by separating the individual words in each column using separate:
+
+bigrams_separated <- MDRbigrams %>%
+  separate(bigram, c("word1", "word2", sep = " "))
+
+bigrams_filtered <- bigrams_separated %>%
+  filter(!word1 %in% mdr_stop_words$word) %>%
+  filter(!word2 %in% mdr_stop_words$word) %>%
+  mutate(word1 = str_extract(word1, "[a-z']+")) %>%
+  mutate(word2 = str_extract(word2, "[a-z']+")) 
+
+bigram_counts <- bigrams_filtered %>%
+  count(word1, word2, sort = TRUE)
+```
+
+```{r eight}
+#8 highest bigram counts
+bigram_counts
+
+#it is now time to recombine- when dealing with bigrams, keep in mind: separate->filter->count->unite
+bigrams_united <- bigrams_filtered %>%
+  unite(bigram, word1, word2, sep = " ") %>%
+  select(-` `)
+```
+
+```{r nine}
+#9 Analyzing bigrams
+#bigram counts per year
+bigrams_united_count <- bigrams_united %>%
+  mutate(year = year(date)) %>%
+  count(year, bigram, sort = TRUE)
+
+plot_bigrams_united <- bigrams_united_count %>%
+  count(bigram, year, n) %>%
+  arrange(desc(n)) %>%
+  mutate(bigram = factor(bigram, levels = rev(unique(bigram)))) %>%
+  group_by(year) %>%
+  top_n(5, n) %>%
+  filter(year >= 2009) %>%
+  ungroup()
+
+ggplot(plot_bigrams_united, aes(bigram, n, fill = year)) +
+  geom_col(show.legend = FALSE) +
+  labs(x = NULL, y = "count") +
+  facet_wrap(~year, ncol = 2, scales = "free") +
+  coord_flip()
+```
+
+```{r ten}
+#10 let's check what kind of pain we are seeing
+bigram_counts %>%
+  filter(word2 == "pain") %>%
+  print(n = 10)
+#what about loss?
+bigram_counts %>%
+  filter(word2 == "loss") %>%
+  print(n = 10)
+#allergy?
+bigram_counts %>%
+  filter(word2 == "allergy") %>%
+  print(n = 10)
+#did the device work?
+bigram_counts %>%
+  filter(word2 == "birth") %>%
+  print(n = 50)
+```
+
+```{r eleven}
+#11 we can also look at the tf-idf of bigrams to analyze importance 
+bigram_tf_idf <- bigrams_united %>%
+  mutate(year = year(date)) %>%
+  count(year, bigram) %>%
+  bind_tf_idf(bigram, year, n) %>%
+  filter(n > 5) %>%
+  arrange(desc(tf_idf))
+
+bigram_tf_idf
+
+#and plot 
+#by year
+plot_bigrams <- bigram_tf_idf %>%
+  bind_tf_idf(bigram, year, n) %>%
+  arrange(desc(tf_idf)) %>%
+  mutate(bigram = factor(bigram, levels = rev(unique(bigram)))) %>%
+  group_by(year) %>%
+  top_n(5, tf_idf) %>%
+  filter(year >= 2009) %>%
+  ungroup()
+
+ggplot(plot_bigrams, aes(bigram, tf_idf, fill = year)) +
+  geom_col(show.legend = FALSE) +
+  labs(x = NULL, y = "tf-idf") +
+  facet_wrap(~year, ncol = 2, scales = "free") +
+  coord_flip()
+
+#all together
+plot_bigrams <- bigram_tf_idf %>%
+  bind_tf_idf(bigram, year, n) %>%
+  arrange(desc(tf_idf)) %>%
+  mutate(bigram = factor(bigram, levels = rev(unique(bigram)))) %>%
+  group_by(year) %>%
+  top_n(5, tf_idf) %>%
+  ungroup()
+
+ggplot(plot_bigrams, aes(bigram, tf_idf, fill = year)) +
+  geom_col(show.legend = FALSE) +
+  labs(x = NULL, y = "tf-idf") +
+  coord_flip()
+```
+
+```{r twelve}
+#12 Try some different word clouds:
+bigrams_united %>%
+  count(bigram, sort = TRUE) %>%
+  with(wordcloud(bigram, n, max.words = 50, colors=colorRampPalette(brewer.pal(9,"Blues"))(25)))
+
+#by type of pain
+bigram_counts %>%
+  filter(word2 == "pain",
+         n >= 100) %>%
+  with(wordcloud(word1, n, max.words = 20, colors=colorRampPalette(brewer.pal(9,"Reds"))(32)))
+#by type of loss
+bigram_counts %>%
+  filter(word2 == "loss",
+         n >= 100) %>%
+  with(wordcloud(word1, n, max.words = 50, colors=colorRampPalette(brewer.pal(9,"Greens"))(32)))
+
+```
+
+```{r thirteen}
+#13 filtering out words of interest:
+#Plot of Pain:
+MDRpainwords <- bigrams_filtered %>%
+  filter(word2 == "pain") %>%
+  count(word1, word2, sort = TRUE) %>%
+  ungroup()
+
+MDRpainwords
+
+plot_of_pain <- MDRpainwords %>%
+  group_by(word1) %>%
+  arrange(desc(abs(n))) %>%
+  filter(n > 500) %>%
+  ungroup()
+
+ggplot(plot_of_pain, aes(word1, n, fill = word2)) +
+  geom_col(show.legend = FALSE) +
+  labs(x = NULL, y = "count") +
+  facet_wrap(~word2, ncol = 2, scales = "free") +
+  coord_flip()
+
+#Plot of Loss:
+MDRlosswords <- bigrams_filtered %>%
+  filter(word2 == "loss") %>%
+  count(word1, word2, sort = TRUE) %>%
+  ungroup()
+
+MDRlosswords
+
+plot_of_loss <- MDRlosswords %>%
+  group_by(word1) %>%
+  arrange(desc(abs(n))) %>%
+  filter(n > 75) %>%
+  ungroup()
+
+ggplot(plot_of_loss, aes(word1, n, fill = word2)) +
+  geom_col(show.legend = FALSE) +
+  labs(x = NULL, y = "count") +
+  facet_wrap(~word2, ncol = 2, scales = "free") +
+  coord_flip()
+
+#Plot of allergies:
+MDRallergy <- bigrams_filtered %>%
+  filter(word2 == "allergy") %>%
+  count(word1, word2, sort = TRUE) %>%
+  ungroup()
+
+MDRallergy
+
+plot_of_allergy <- MDRallergy %>%
+  group_by(word1) %>%
+  arrange(desc(abs(n))) %>%
+  filter(n > 75) %>%
+  ungroup()
+
+ggplot(plot_of_allergy, aes(word1, n, fill = word2)) +
+  geom_col(show.legend = FALSE) +
+  labs(x = NULL, y = "count") +
+  facet_wrap(~word2, ncol = 2, scales = "free") +
+  coord_flip()
+
+```
+
+```{r fourteen}
+#14 We could try some Trigrams
+MDRtrigrams <- MDRresults %>%
+  unnest_tokens(trigram, text, token = "ngrams", n = 3)
+#n = 3 sets pairs of three consecutive words, also known as trigrams
+MDRtrigrams
+
+#check the most common trigrams:
+MDRtrigrams %>%
+  count(trigram, sort = TRUE)
+
+#to remove these common stopwords, start by separating the individual words in each column using separate:
+
+trigrams_separated <- MDRtrigrams %>%
+  separate(trigram, c("word1", "word2", "word3", sep = " "))
+
+trigrams_filtered <- trigrams_separated %>%
+  filter(!word1 %in% mdr_stop_words$word) %>%
+  filter(!word2 %in% mdr_stop_words$word) %>%
+  filter(!word3 %in% mdr_stop_words$word) 
+
+trigram_counts <- trigrams_filtered %>%
+  count(word1, word2, word3, sort = TRUE)
+
+#highest trigram counts
+trigram_counts
+
+#it is now time to recombine
+trigrams_united <- trigrams_filtered %>%
+  unite(trigram, word1, word2, word3, sep = " ") %>%
+  select(-` `)
+
+#Analyzing trigrams
+#bigram counts per year
+trigrams_united_count <- trigrams_united %>%
+  mutate(year = year(date)) %>%
+  count(year, trigram, sort = TRUE)
+
+#trigram tf idf
+trigram_tf_idf <- trigrams_united %>%
+  mutate(year = year(date)) %>%
+  count(year, trigram) %>%
+  bind_tf_idf(trigram, year, n) %>%
+  filter(n > 5) %>%
+  arrange(desc(tf_idf))
+
+trigram_tf_idf
+
+plot_trigrams <- trigram_tf_idf %>%
+  bind_tf_idf(trigram, year, n) %>%
+  arrange(desc(tf_idf)) %>%
+  mutate(trigram = factor(trigram, levels = rev(unique(trigram)))) %>%
+  group_by(year) %>%
+  top_n(5, tf_idf) %>%
+  ungroup()
+
+ggplot(plot_trigrams, aes(trigram, tf_idf, fill = year)) +
+  geom_col(show.legend = FALSE) +
+  labs(x = NULL, y = "tf-idf") +
+  coord_flip()
+```
